@@ -6,24 +6,20 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QPalette, QColor, QPixmap, QIcon, QFont
 
-from processor import check_excel_file
+# Import custom modules
+from styles import *
+from processor import *
 
 class DropArea(QLabel):
     def __init__(self, placeholder: str, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setText(placeholder)
-        self.setStyleSheet("""
-            background-color: #F7F7FF;
-            border: 2px dashed #B8C4FF;
-            border-radius: 8px;
-            padding: 20px;
-            font-size: 18px;
-            color: #666677;
-        """)
+        self.setStyleSheet(DROP_AREA_NORMAL)
         self.setAcceptDrops(True)
         self.setMinimumSize(300, 200)
         self.setWordWrap(True)
+        self.file_path: Optional[str] = None
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
@@ -34,6 +30,7 @@ class FileDropArea(DropArea):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__("Trascina qui il file excel", parent)
 
+
     def dropEvent(self, event: QDropEvent) -> None:
         urls = event.mimeData().urls()
         if urls:
@@ -42,31 +39,31 @@ class FileDropArea(DropArea):
             
             # Validate the Excel file
             is_valid, message = check_excel_file(file_path)
-            
             if is_valid:
-                # Store the file path for later use
-                self.file_path = file_path
-                # Update the display text with success
-                self.setText(f"File:\n{filename}")
-                self.setStyleSheet("""
-                    background-color: #F0FFF0;  /* Light green background */
-                    border: 2px dashed #90EE90;
-                    border-radius: 8px;
-                    padding: 20px;
-                    font-size: 18px;
-                    color: #666677;
-                """)
+                # Parse the Excel file to get information
+                success, info, parse_message = parse_excel_file(file_path)
+
+                if success:
+                    # Store the file path for later use
+                    self.file_path = file_path
+
+                    # Format information for display
+                    elements_info = f"File:\n{filename}\n\nElementi: {info['rows']}\nColonne: {len(info['column_names'])}"
+                
+                    # Update the display text with success and information
+                    self.setText(elements_info)
+                    self.setStyleSheet(DROP_AREA_SUCCESS)
+                else:
+                    # Update the display with parsing error
+                    self.setText(f"Errore Parsing Excel:\n{parse_message}")
+                    self.setStyleSheet(DROP_AREA_ERROR)
+                    self.file_path = None
+                    
             else:
                 # Update the display with error
                 self.setText(f"Errore:\n{message}")
-                self.setStyleSheet("""
-                    background-color: #FFF0F0;  /* Light red background */
-                    border: 2px dashed #FFB6C1;
-                    border-radius: 8px;
-                    padding: 20px;
-                    font-size: 18px;
-                    color: #666677;
-                """)
+                self.setStyleSheet(DROP_AREA_ERROR)
+                self.file_path = None
 
 
 class FolderDropArea(DropArea):
@@ -76,8 +73,40 @@ class FolderDropArea(DropArea):
     def dropEvent(self, event: QDropEvent) -> None:
         urls = event.mimeData().urls()
         if urls:
+            folder_path = urls[0].toLocalFile()
             foldername = urls[0].fileName()
-            self.setText(f"Cartella:\n{foldername}")
+            
+            
+            # Validate the folder
+            is_valid, message = check_image_folder(folder_path)
+            print("ciao")
+            if is_valid:
+                # Analyze the folder to count images
+                success, info, analyze_message = analyze_image_folder(folder_path)
+            
+                if success:
+                    # Store the folder path for later use
+                    self.file_path = folder_path
+                    
+                    # Format the image type breakdown
+                    type_info = ""
+                    for ext, count in info["image_types"].items():
+                        type_info += f"\n{ext}: {count}"
+
+                    # Update the display text with success and information
+                    self.setText(f"Cartella:\n{foldername}\n\nImmagini: {info['total_images']}{type_info}")
+                    self.setStyleSheet(DROP_AREA_SUCCESS)
+                else:
+                    # Update the display with analysis error
+                    self.setText(f"Errore:\n{analyze_message}")
+                    self.setStyleSheet(DROP_AREA_ERROR)
+                    self.file_path = None
+
+            else:
+                # Update the display with error
+                self.setText(f"Errore:\n{message}")
+                self.setStyleSheet(DROP_AREA_ERROR)
+                self.file_path = None
 
 
 class MainWindow(QMainWindow):
@@ -119,7 +148,7 @@ class MainWindow(QMainWindow):
         title_font.setPointSize(24)
         title_font.setBold(True)
         self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet("color: #444455;")
+        self.title_label.setStyleSheet(TITLE_TEXT)
         self.title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         header_layout.addWidget(self.title_label)
         header_layout.setStretch(1, 1)  # Give more stretch to title
@@ -130,11 +159,7 @@ class MainWindow(QMainWindow):
         # Add description with bullet points
         self.description_label = QLabel("Trascina excel BOX e cartella immagini per generare:")
         self.description_label.setWordWrap(True)
-        self.description_label.setStyleSheet("""
-            color: #666677;
-            font-size: 14px;
-            margin-bottom: 5px;
-        """)
+        self.description_label.setStyleSheet(DESCRIPTION_TEXT)
         main_layout.addWidget(self.description_label)
         
         # Add bullet points
@@ -150,10 +175,7 @@ class MainWindow(QMainWindow):
         
         for point in bullet_points:
             bullet_label = QLabel(point)
-            bullet_label.setStyleSheet("""
-                color: #666677;
-                font-size: 14px;
-            """)
+            bullet_label.setStyleSheet(BULLET_POINT)
             bullet_point_layout.addWidget(bullet_label)
         
         main_layout.addLayout(bullet_point_layout)
@@ -179,24 +201,12 @@ class MainWindow(QMainWindow):
         # Add text field for path
         self.output_path = QLineEdit()
         self.output_path.setPlaceholderText("Seleziona percorso di output...")
-        self.output_path.setStyleSheet("""
-            border: 1px solid #B8C4FF;
-            border-radius: 4px;
-            padding: 8px;
-            font-size: 14px;
-        """)
+        self.output_path.setStyleSheet(PATH_INPUT)
         path_layout.addWidget(self.output_path)
         
         # Add browse button
         self.browse_button = QPushButton("Sfoglia...")
-        self.browse_button.setStyleSheet("""
-            background-color: #E0E4FF;
-            color: #444455;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 15px;
-            font-size: 14px;
-        """)
+        self.browse_button.setStyleSheet(BROWSE_BUTTON)
         self.browse_button.setCursor(Qt.PointingHandCursor)
         path_layout.addWidget(self.browse_button)
         
@@ -208,15 +218,7 @@ class MainWindow(QMainWindow):
         
         # Add button
         self.generate_button = QPushButton("Genera Excel Anteprime")
-        self.generate_button.setStyleSheet("""
-            background-color: #B8C4FF;
-            color: #444455;
-            border: none;
-            border-radius: 4px;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: bold;
-        """)
+        self.generate_button.setStyleSheet(GENERATE_BUTTON)
         self.generate_button.setCursor(Qt.PointingHandCursor)
         self.generate_button.clicked.connect(self.generate_excel)
         main_layout.addWidget(self.generate_button)
@@ -227,7 +229,7 @@ class MainWindow(QMainWindow):
         subtitle_font.setPointSize(9)
         subtitle_font.setItalic(True)
         self.subtitle_label.setFont(subtitle_font)
-        self.subtitle_label.setStyleSheet("color: #888899;")
+        self.subtitle_label.setStyleSheet(FOOTER_TEXT)
         self.subtitle_label.setAlignment(Qt.AlignRight)
         main_layout.addWidget(self.subtitle_label)
 
@@ -237,9 +239,31 @@ class MainWindow(QMainWindow):
             self.output_path.setText(path)
     
     def generate_excel(self) -> None:
-        # This function will be called when the button is clicked
-        print("Generate Excel button clicked")
-        # Add your Excel generation logic here
+        # Get file paths
+        excel_path = self.file_drop_area.file_path
+        images_folder = self.folder_drop_area.file_path
+        output_path = self.output_path.text()
+        
+        # Validate all inputs are provided
+        if not excel_path:
+            print("Excel file not provided")
+            return
+            
+        if not images_folder:
+            print("Images folder not provided")
+            return
+            
+        if not output_path:
+            print("Output path not provided")
+            return
+        
+        print(f"Generating Excel with:")
+        print(f"Excel file: {excel_path}")
+        print(f"Images folder: {images_folder}")
+        print(f"Output path: {output_path}")
+        
+        # Call processing function here
+        # process_files(excel_path, images_folder, output_path)
 
 
 if __name__ == "__main__":
