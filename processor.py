@@ -1,9 +1,125 @@
-from typing import Tuple
+from typing import Tuple, Dict, Any, List, Set
 import os.path
+import pandas as pd
+import re
+
+# Add import for numbers-parser
+try:
+    from numbers_parser import Document as NumbersDocument
+except ImportError:
+    # If the library is not installed, we'll handle it gracefully
+    NumbersDocument = None
+
+# List of required columns for our specific Excel format
+REQUIRED_COLUMNS = [
+    "CODICE TAILOR", "POSIZIONE", "CATEGORIA", "FOTO", "FOTO DETTAGLIO", 
+    "COMPOSIZIONE", "FORNITORE", "ART. FORNITORE", "UNITA' DI MISURA", 
+    "ALTEZZA", "PESO", "ARMATURA", "LAVORAZIONE", "DESCRIZIONE", 
+    "MOTIVO", "SOSTENIBILITA'", "CERTIFICAZIONE"
+]
+
+def normalize_column_name(column: str) -> str:
+    """
+    Normalize a column name for fuzzy matching.
+    
+    Args:
+        column: Original column name
+        
+    Returns:
+        Normalized column name (lowercase, no spaces, no special chars)
+    """
+    # Convert to lowercase
+    normalized = column.lower()
+    # Remove spaces and special characters
+    normalized = re.sub(r'[^a-z0-9]', '', normalized)
+    return normalized
+
+def match_column_name(column: str, df_columns: List[str]) -> str:
+    """
+    Try to match a required column name with the actual columns in the dataframe.
+    
+    Args:
+        column: Required column name
+        df_columns: List of column names in the dataframe
+        
+    Returns:
+        The matched column name from df_columns, or None if no match found
+    """
+    # First try exact match
+    if column in df_columns:
+        return column
+    
+    # Try case-insensitive match
+    for df_col in df_columns:
+        if column.lower() == df_col.lower():
+            return df_col
+    
+    # Try fuzzy match
+    normalized_req = normalize_column_name(column)
+    for df_col in df_columns:
+        normalized_df = normalize_column_name(df_col)
+        
+        # Check if normalized strings are very similar
+        if normalized_req == normalized_df:
+            return df_col
+        
+        # Check if one is contained in the other
+        if (normalized_req in normalized_df) or (normalized_df in normalized_req):
+            # Additional check: they should be at least 70% similar in length
+            min_len = min(len(normalized_req), len(normalized_df))
+            max_len = max(len(normalized_req), len(normalized_df))
+            if min_len / max_len >= 0.7:
+                return df_col
+    
+    # No match found
+    return None
+
+def numbers_to_dataframe(file_path: str) -> pd.DataFrame:
+    """
+    Convert a Numbers file to a pandas DataFrame using numbers-parser.
+    
+    Args:
+        file_path: Path to the Numbers file
+        
+    Returns:
+        DataFrame containing the data from the Numbers file
+    """
+    if NumbersDocument is None:
+        raise ImportError("numbers-parser library is not installed. Please install with: pip install numbers-parser")
+    
+    # Open the Numbers document
+    doc = NumbersDocument(file_path)
+    
+    # Use the first sheet and first table by default
+    sheet = doc.sheets[0]
+    table = sheet.tables[0]
+    
+    # Get rows data - this returns a list of lists with cell objects
+    rows_data = table.rows()
+    
+    if len(rows_data) == 0:
+        return pd.DataFrame()
+    
+    # Extract headers from the first row
+    headers = [cell.value if hasattr(cell, 'value') else f"Column_{i}" 
+               for i, cell in enumerate(rows_data[0])]
+    
+    # Extract data rows (skipping header row)
+    data = []
+    for row in rows_data[1:]:
+        row_data = {}
+        for i, cell in enumerate(row):
+            if i < len(headers):  # Ensure we don't go out of bounds with headers
+                column_name = headers[i]
+                row_data[column_name] = cell.value if hasattr(cell, 'value') else None
+        data.append(row_data)
+    
+    # Create DataFrame
+    return pd.DataFrame(data)
 
 def check_excel_file(file_path: str) -> Tuple[bool, str]:
     """
-    Check if the given file path is a valid Excel file.
+    Check if the given file path is a valid Excel or Numbers file.
     
     Args:
         file_path: Path to the file to check
@@ -18,21 +134,19 @@ def check_excel_file(file_path: str) -> Tuple[bool, str]:
         return False, "Il file non esiste"
     
     # Check file extension
-    valid_extensions = ['.xlsx', '.xls']
+    valid_extensions = ['.xlsx', '.xls', '.numbers']
     file_extension = os.path.splitext(file_path)[1].lower()
     
     if file_extension not in valid_extensions:
-        return False, f"Il file non è un file Excel valido. Estensione rilevata: {file_extension}"
+        return False, f"Il file non è un formato valido. Estensione rilevata: {file_extension}"
     
     # If we get here, basic checks passed
-    return True, "File Excel valido"
-
-import pandas as pd
-from typing import Tuple, Dict, Any
+    return True, "File valido"
 
 def parse_excel_file(file_path: str) -> Tuple[bool, Dict[str, Any], str]:
     """
-    Parse an Excel file and extract key information.
+    Parse an Excel or Numbers file and extract key information.
+    Also validates that the file contains all required columns.
     
     Args:
         file_path: Path to the Excel file
@@ -44,21 +158,106 @@ def parse_excel_file(file_path: str) -> Tuple[bool, Dict[str, Any], str]:
             - Message with details about parsing result
     """
     try:
-        # Read the Excel file
-        df = pd.read_excel(file_path)
+        # Check if it's a Numbers file
+        file_extension = os.path.splitext(file_path)[1].lower()
+        
+        # Read the Excel or Numbers file into a pandas DataFrame
+        if file_extension == '.numbers':
+            if NumbersDocument is None:
+                return False, {}, "Per supportare i file Numbers, installa la libreria numbers-parser: pip install numbers-parser"
+            
+            try:
+                df = numbers_to_dataframe(file_path)
+            except Exception as e:
+                return False, {}, f"Errore nell'apertura del file Numbers: {str(e)}"
+        else:
+            # Regular Excel file
+            df = pd.read_excel(file_path)
         
         # Extract basic information
+        original_rows = len(df)
         info = {
-            "rows": len(df),
+            "rows": original_rows,
             "columns": len(df.columns),
             "column_names": list(df.columns),
         }
         
-        return True, info, "File Excel analizzato con successo"
+        # Check for required columns with fuzzy matching
+        missing_columns = []
+        column_mapping = {}  # Maps required column names to actual column names
+        
+        for column in REQUIRED_COLUMNS:
+            matched_column = match_column_name(column, list(df.columns))
+            if matched_column:
+                column_mapping[column] = matched_column
+            else:
+                missing_columns.append(column)
+        
+        if missing_columns:
+            return False, {}, f"Colonne mancanti: {', '.join(missing_columns)}"
+        
+        # Store the column mapping for later use
+        info["column_mapping"] = column_mapping
+        
+        # Check for duplicates in FOTO column
+        foto_column = column_mapping["FOTO"]
+        
+        # Find duplicates
+        foto_values = df[foto_column].dropna().astype(str)
+        duplicate_mask = foto_values.duplicated(keep=False)
+        duplicates = foto_values[duplicate_mask].unique()
+
+        print(duplicates)
+        
+        # Store original duplicates info before removing
+        if len(duplicates) > 0:
+            print("duplicati",len(duplicates))
+            info["duplicate_fotos"] = list(duplicates)
+            info["duplicate_count"] = len(duplicates)
+            
+            # Remove duplicates, keeping rows with most information
+            # First, create a helper column to count non-null values
+            df['_info_count'] = df.notna().sum(axis=1)
+            
+            # Process each duplicate value
+            cleaned_df = df.copy()
+            for dup_value in duplicates:
+                # Get all rows with this duplicate value
+                dup_rows = df[df[foto_column] == dup_value]
+                
+                if len(dup_rows) > 1:
+                    # Find the row with the most information
+                    best_row_idx = dup_rows['_info_count'].idxmax()
+                    
+                    # Remove all other duplicates from cleaned_df
+                    dup_indices = dup_rows.index.tolist()
+                    dup_indices.remove(best_row_idx)  # Keep the best row
+                    cleaned_df = cleaned_df.drop(dup_indices)
+            
+            # Remove helper column
+            print(len(cleaned_df))
+            cleaned_df = cleaned_df.drop('_info_count', axis=1)
+            print(len(cleaned_df))
+            # Update dataframe
+            df = cleaned_df
+            
+            # Record how many rows were removed
+            rows_removed = original_rows - len(df)
+            info["rows_after_dedup"] = len(df)
+            info["rows_removed"] = rows_removed
+            
+            # Save the cleaned dataframe
+            info["cleaned_df"] = df
+            
+            return True, info, f"File analizzato con successo. Rimosse {rows_removed} righe duplicate dalla colonna FOTO."
+        
+        # No duplicates found
+        info["cleaned_df"] = df
+        return True, info, "File analizzato con successo"
     
     except Exception as e:
-        return False, {}, f"Errore nell'analisi del file Excel: {str(e)}"
-
+        return False, {}, f"Errore nell'analisi del file: {str(e)}"
+    
 def check_image_folder(folder_path: str) -> Tuple[bool, str]:
     """
     Check if the given path is a valid folder containing images.
