@@ -147,6 +147,7 @@ def parse_excel_file(file_path: str) -> Tuple[bool, Dict[str, Any], str]:
     """
     Parse an Excel or Numbers file and extract key information.
     Also validates that the file contains all required columns.
+    Removes rows with missing FOTO values and rows with duplicate FOTO values.
     
     Args:
         file_path: Path to the Excel file
@@ -199,24 +200,31 @@ def parse_excel_file(file_path: str) -> Tuple[bool, Dict[str, Any], str]:
         # Store the column mapping for later use
         info["column_mapping"] = column_mapping
         
-        # Check for duplicates in FOTO column
+        # Get FOTO column name
         foto_column = column_mapping["FOTO"]
         
+        # Step 1: Count and remove rows with missing FOTO values
+        missing_foto_mask = df[foto_column].isna() | (df[foto_column] == "")
+        missing_foto_rows = missing_foto_mask.sum()
+        
+        # Remove rows with missing FOTO values
+        if missing_foto_rows > 0:
+            df = df[~missing_foto_mask].reset_index(drop=True)
+            print(f"Removed {missing_foto_rows} rows with missing FOTO values")
+        
+        # Step 2: Deal with duplicates in FOTO column
         # Find duplicates
-        foto_values = df[foto_column].dropna().astype(str)
+        foto_values = df[foto_column].astype(str)
         duplicate_mask = foto_values.duplicated(keep=False)
         duplicates = foto_values[duplicate_mask].unique()
-
-        print(duplicates)
         
-        # Store original duplicates info before removing
+        duplicate_rows_removed = 0
+        
+        # Remove duplicates, keeping rows with most information
         if len(duplicates) > 0:
-            print("duplicati",len(duplicates))
-            info["duplicate_fotos"] = list(duplicates)
-            info["duplicate_count"] = len(duplicates)
+            print(f"Found {len(duplicates)} duplicate FOTO values")
             
-            # Remove duplicates, keeping rows with most information
-            # First, create a helper column to count non-null values
+            # Create a helper column to count non-null values
             df['_info_count'] = df.notna().sum(axis=1)
             
             # Process each duplicate value
@@ -233,31 +241,40 @@ def parse_excel_file(file_path: str) -> Tuple[bool, Dict[str, Any], str]:
                     dup_indices = dup_rows.index.tolist()
                     dup_indices.remove(best_row_idx)  # Keep the best row
                     cleaned_df = cleaned_df.drop(dup_indices)
+                    
+                    # Count removed rows
+                    duplicate_rows_removed += len(dup_indices)
             
             # Remove helper column
-            print(len(cleaned_df))
             cleaned_df = cleaned_df.drop('_info_count', axis=1)
-            print(len(cleaned_df))
+            
             # Update dataframe
             df = cleaned_df
             
-            # Record how many rows were removed
-            rows_removed = original_rows - len(df)
-            info["rows_after_dedup"] = len(df)
-            info["rows_removed"] = rows_removed
-            
-            # Save the cleaned dataframe
-            info["cleaned_df"] = df
-            
-            return True, info, f"File analizzato con successo. Rimosse {rows_removed} righe duplicate dalla colonna FOTO."
+            print(f"Removed {duplicate_rows_removed} duplicate rows")
         
-        # No duplicates found
+        # Total rows removed
+        total_rows_removed = missing_foto_rows + duplicate_rows_removed
+        
+        # Record statistics
+        info["rows_after_cleaning"] = len(df)
+        info["total_rows_removed"] = total_rows_removed
+        info["missing_foto_rows"] = missing_foto_rows
+        info["duplicate_rows_removed"] = duplicate_rows_removed
+        
+        # Save the cleaned dataframe
         info["cleaned_df"] = df
-        return True, info, "File analizzato con successo"
+        
+        # Generate appropriate message
+        if total_rows_removed > 0:
+            message = f"File analizzato con successo. Rimosse {total_rows_removed} righe ({missing_foto_rows} senza FOTO, {duplicate_rows_removed} duplicate)."
+        else:
+            message = "File analizzato con successo."
+            
+        return True, info, message
     
     except Exception as e:
         return False, {}, f"Errore nell'analisi del file: {str(e)}"
-    
 def check_image_folder(folder_path: str) -> Tuple[bool, str]:
     """
     Check if the given path is a valid folder containing images.

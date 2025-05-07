@@ -6,6 +6,9 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent, QPalette, QColor, QPixmap, QIcon, QFont
 
+from PyQt5.QtCore import QSettings
+settings = QSettings("buio", "GeneraExcelAnteprime")
+
 # Import custom modules
 from styles import *
 from processor import *
@@ -48,8 +51,18 @@ class FileDropArea(DropArea):
                     self.file_path = file_path
 
                     # Format information for display
-                    elements_info = f"File:\n{filename}\n\nElementi: {info['rows']}\nColonne: {len(info['column_names'])}"
+                    elements_info = f"{filename}\n\nColonne: {len(info['column_names'])}"
                 
+                    # Check if we have information about removed rows
+                    if "total_rows_removed" in info and info["total_rows_removed"] > 0:
+                        # Show both before and after counts when rows were removed
+                        elements_info += f"\nElementi validi: {info['rows_after_cleaning']}\n"
+                        #elements_info += f"Elementi originali: {info['rows']}\n"
+                        elements_info += f"Righe rimosse: {info['total_rows_removed']}"
+                    else:
+                        # Show only row count if no rows were removed
+                        elements_info += f"\nElementi: {info['rows']}\n"
+                        
                     # Update the display text with success and information
                     self.setText(elements_info)
                     self.setStyleSheet(DROP_AREA_SUCCESS)
@@ -79,7 +92,6 @@ class FolderDropArea(DropArea):
             
             # Validate the folder
             is_valid, message = check_image_folder(folder_path)
-            print("ciao")
             if is_valid:
                 # Analyze the folder to count images
                 success, info, analyze_message = analyze_image_folder(folder_path)
