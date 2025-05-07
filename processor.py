@@ -275,45 +275,10 @@ def parse_excel_file(file_path: str) -> Tuple[bool, Dict[str, Any], str]:
     
     except Exception as e:
         return False, {}, f"Errore nell'analisi del file: {str(e)}"
-def check_image_folder(folder_path: str) -> Tuple[bool, str]:
+    
+def check_image_folder(folder_path: str) -> Tuple[bool, Dict[str, Any], str]:
     """
-    Check if the given path is a valid folder containing images.
-    
-    Args:
-        folder_path: Path to the folder to check
-        
-    Returns:
-        Tuple containing:
-            - Boolean indicating if the folder is valid
-            - Message with details about validation result
-    """
-    # Check if folder exists
-    if not os.path.isdir(folder_path):
-        return False, "La cartella non esiste"
-    
-    # Check if folder contains any images
-    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff']
-    has_images = False
-    
-    # Walk through the folder
-    for file in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, file)
-        if os.path.isfile(file_path):
-            # Check file extension
-            ext = os.path.splitext(file_path)[1].lower()
-            if ext in image_extensions:
-                has_images = True
-                break
-    
-    if not has_images:
-        return False, "La cartella non contiene immagini supportate"
-    
-    # If we get here, all checks passed
-    return True, "Cartella immagini valida"
-
-def analyze_image_folder(folder_path: str) -> Tuple[bool, Dict[str, Any], str]:
-    """
-    Analyze an image folder and extract key information.
+    Checks a folder to validate and count images at the first level only.
     
     Args:
         folder_path: Path to the folder to check
@@ -324,8 +289,11 @@ def analyze_image_folder(folder_path: str) -> Tuple[bool, Dict[str, Any], str]:
             - Dictionary with image information
             - Message with analysis details
     """
+    print(f"DEBUG: Checking folder: {folder_path}")
+    
     # Check if folder exists
     if not os.path.isdir(folder_path):
+        print(f"DEBUG: Not a directory: {folder_path}")
         return False, {}, "La cartella non esiste"
     
     # Analyze images in the folder
@@ -334,18 +302,26 @@ def analyze_image_folder(folder_path: str) -> Tuple[bool, Dict[str, Any], str]:
     image_types = {}
     
     try:
-        # Walk through the folder
+        # Walk through the folder (only first level)
+        print(f"DEBUG: Listing directory contents")
         for file in os.listdir(folder_path):
             file_path = os.path.join(folder_path, file)
+            print(f"DEBUG: Found file: {file_path}")
+            
             if os.path.isfile(file_path):
                 # Check file extension
                 ext = os.path.splitext(file_path)[1].lower()
+                print(f"DEBUG: File extension: {ext}")
+                
                 if ext in image_extensions:
                     image_count += 1
                     # Count by image type
                     image_types[ext] = image_types.get(ext, 0) + 1
+                    print(f"DEBUG: Found image: {file}, count now: {image_count}")
         
+        print(f"DEBUG: Total images found: {image_count}")
         if image_count == 0:
+            print("DEBUG: No supported images found")
             return False, {}, "La cartella non contiene immagini supportate"
         
         # Prepare info dictionary
@@ -354,7 +330,9 @@ def analyze_image_folder(folder_path: str) -> Tuple[bool, Dict[str, Any], str]:
             "image_types": image_types
         }
         
+        print(f"DEBUG: Success, returning info: {info}")
         return True, info, "Cartella analizzata con successo"
     
     except Exception as e:
+        print(f"DEBUG: Error occurred: {str(e)}")
         return False, {}, f"Errore nell'analisi della cartella: {str(e)}"

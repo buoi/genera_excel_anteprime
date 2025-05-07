@@ -87,39 +87,48 @@ class FolderDropArea(DropArea):
         urls = event.mimeData().urls()
         if urls:
             folder_path = urls[0].toLocalFile()
-            foldername = urls[0].fileName()
+            print(f"DEBUG: Dropped path: {folder_path}")
             
-            
-            # Validate the folder
-            is_valid, message = check_image_folder(folder_path)
-            if is_valid:
-                # Analyze the folder to count images
-                success, info, analyze_message = analyze_image_folder(folder_path)
-            
-                if success:
-                    # Store the folder path for later use
-                    self.file_path = folder_path
-                    
-                    # Format the image type breakdown
-                    type_info = ""
-                    for ext, count in info["image_types"].items():
-                        type_info += f"\n{ext}: {count}"
-
-                    # Update the display text with success and information
-                    self.setText(f"Cartella:\n{foldername}\n\nImmagini: {info['total_images']}{type_info}")
-                    self.setStyleSheet(DROP_AREA_SUCCESS)
-                else:
-                    # Update the display with analysis error
-                    self.setText(f"Errore:\n{analyze_message}")
-                    self.setStyleSheet(DROP_AREA_ERROR)
-                    self.file_path = None
-
-            else:
-                # Update the display with error
-                self.setText(f"Errore:\n{message}")
+            # Check if the path is actually a directory
+            import os
+            if not os.path.isdir(folder_path):
+                print(f"DEBUG: Not a directory")
+                self.setText("Errore:\nDevi trascinare una cartella, non un file")
                 self.setStyleSheet(DROP_AREA_ERROR)
                 self.file_path = None
+                return
+                
+            foldername = os.path.basename(os.path.normpath(folder_path))
+            # Extract folder name from path
+            print(f"DEBUG: Folder name: {foldername}")
+            
+            # Check the folder for images
+            print(f"DEBUG: Calling check_image_folder")
+            success, info, message = check_image_folder(folder_path)
+            print(f"DEBUG: check_image_folder results: success={success}, message={message}")
+            
+            if success:
+                # Store the folder path for later use
+                self.file_path = folder_path
+                
+                # Format the image type breakdown
+                type_info = ""
+                for ext, count in info["image_types"].items():
+                    type_info += f"\n{ext}: {count}"
+                print(f"DEBUG: Image types: {type_info}")
 
+                # Update the display text with success and information
+                display_text = f"Cartella:\n{foldername}\n\nImmagini: {info['total_images']}{type_info}"
+                print(f"DEBUG: Setting display text: {display_text}")
+                self.setText(display_text)
+                self.setStyleSheet(DROP_AREA_SUCCESS)
+            else:
+                # Update the display with error
+                print(f"DEBUG: Setting error text: {message}")
+                # Update the display with error but include the folder name
+                self.setText(f"Cartella:\n{foldername}\n\nErrore:\n{message}")
+                self.setStyleSheet(DROP_AREA_ERROR)
+                self.file_path = None
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
@@ -169,7 +178,7 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(header_layout)
         
         # Add description with bullet points
-        self.description_label = QLabel("Trascina excel BOX e cartella immagini per generare:")
+        self.description_label = QLabel("Trascina excel BOX e cartella immagini BOX per generare:")
         self.description_label.setWordWrap(True)
         self.description_label.setStyleSheet(DESCRIPTION_TEXT)
         main_layout.addWidget(self.description_label)
@@ -180,7 +189,7 @@ class MainWindow(QMainWindow):
         bullet_point_layout.setContentsMargins(20, 0, 0, 10)
         
         bullet_points = [
-            "• Excel anteprime",
+            "• Excel BOX anteprime",
             "• Cartella con crop per sito",
             "• CSV per caricamento sito"
         ]
@@ -191,6 +200,16 @@ class MainWindow(QMainWindow):
             bullet_point_layout.addWidget(bullet_label)
         
         main_layout.addLayout(bullet_point_layout)
+
+        # Add the new information text
+        self.info_label = QLabel("Supporta file .xls, .xlsx e .numbers. Cerca le immagini nella cartella principale, non controlla le sottocartelle")
+        self.info_label.setWordWrap(True)
+        self.info_label.setStyleSheet(INFO_TEXT)  # You'll need to add this style
+        main_layout.addWidget(self.info_label)
+
+        # Create horizontal layout for drop areas
+        drop_layout = QHBoxLayout()
+        drop_layout.setSpacing(20)
         
         # Create horizontal layout for drop areas
         drop_layout = QHBoxLayout()

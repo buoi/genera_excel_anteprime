@@ -83,3 +83,11 @@ FOOTER_TEXT = """
     font-style: italic;
 """
 
+INFO_TEXT = """
+    color: #888899;
+    font-size: 12px;
+    font-style: italic;
+    margin-top: 5px;
+    margin-bottom: 15px;
+"""
+
