@@ -1,7 +1,9 @@
 from typing import Tuple, Dict, Any, List, Set
-import os.path
+import os, os.path, re
 import pandas as pd
-import re
+import xlsxwriter
+from PIL import Image
+
 
 # Add import for numbers-parser
 try:
@@ -336,3 +338,172 @@ def check_image_folder(folder_path: str) -> Tuple[bool, Dict[str, Any], str]:
     except Exception as e:
         print(f"DEBUG: Error occurred: {str(e)}")
         return False, {}, f"Errore nell'analisi della cartella: {str(e)}"
+
+def generate_excel_output(df, foto_column, images_folder, output_path, 
+                         progress_callback=None, status_callback=None):
+    """Generate Excel output with thumbnails."""
+    # This will be filled in later
+    pass
+
+def generate_crop_images(df, foto_column, images_folder, output_path,
+                       progress_callback=None, status_callback=None):
+    """Generate cropped images for website use."""
+    # This will be filled in later
+    pass
+
+def generate_csv_output(df, output_path):
+    """Generate CSV file for website import."""
+    # This will be filled in later
+    pass
+
+def process_files(excel_path: str, images_folder: str, output_path: str, 
+                  progress_callback=None, status_callback=None):
+    """
+    Process files to generate Excel output with thumbnails.
+    
+    Args:
+        excel_path: Path to the Excel file
+        images_folder: Path to the folder containing images
+        output_path: Path to save outputs
+        progress_callback: Function to call with progress updates
+        status_callback: Function to call with status messages
+        
+    Returns:
+        Tuple containing:
+            - Boolean indicating success
+            - Dictionary with processing information
+    """
+    try:
+        # Create output directory
+        os.makedirs(output_path, exist_ok=True)
+        
+        # Get the cleaned DataFrame from the existing function
+        _, info, _ = parse_excel_file(excel_path)
+        df = info["cleaned_df"]
+        column_mapping = info["column_mapping"]
+        foto_column = column_mapping["FOTO"]
+        
+        # Set up output paths
+        excel_output_path = os.path.join(output_path, "anteprime_excel.xlsx")
+        crops_dir = os.path.join(output_path, "crops")
+        csv_output_path = os.path.join(output_path, "website_import.csv")
+        
+        # Create necessary directories
+        os.makedirs(crops_dir, exist_ok=True)
+        
+        # Create a temporary directory for thumbnails
+        thumbs_dir = os.path.join(output_path, "thumbnails")
+        os.makedirs(thumbs_dir, exist_ok=True)
+        
+        # Create Excel workbook
+        workbook = xlsxwriter.Workbook(excel_output_path)
+        worksheet = workbook.add_worksheet()
+        
+        # Configure Excel worksheet
+        worksheet.set_column(0, 0, 30)  # ANTEPRIMA column width - increased for larger thumbnails
+        worksheet.set_column(1, len(REQUIRED_COLUMNS), 16)  # Other columns width
+        worksheet.set_default_row(120, True)  # Row height for thumbnails - increased
+        
+        # Prepare ordered columns exactly as specified
+        ordered_columns = [column_mapping[col] for col in REQUIRED_COLUMNS]
+        
+        # Prepare header with ANTEPRIMA as first column
+        header = ['ANTEPRIMA'] + REQUIRED_COLUMNS
+        
+        # Write header row
+        for j, col_name in enumerate(header):
+            worksheet.write(0, j, col_name)
+        
+        # Track missing images and valid rows
+        missing_images = []
+        valid_rows_data = []
+        
+        # Process each row
+        total_rows = len(df)
+        if status_callback:
+            status_callback("Elaborazione in corso...")
+        
+        # Main processing loop
+        for i, (_, row) in enumerate(df.iterrows()):
+            if progress_callback:
+                progress_callback(i+1, total_rows)
+            
+            # Get image path
+            image_path = str(row[foto_column]) if not pd.isna(row[foto_column]) else ""
+            if not image_path:
+                missing_images.append("(Vuoto)")
+                continue
+                
+            full_image_path = os.path.join(images_folder, image_path)
+            
+            # Check if image exists
+            if os.path.isfile(full_image_path):
+                try:
+                    # Process the image
+                    # Create thumbnail for Excel
+                    thumb_filename = f"thumb_{i}_{os.path.basename(image_path)}"
+                    thumb_path = os.path.join(thumbs_dir, thumb_filename)
+                    
+                    # Open and process image
+                    img = Image.open(full_image_path)
+                    
+                    # Rotate image if needed (based on your mockup)
+                    img = img.rotate(90, expand=True)
+                    
+                    # Resize for thumbnail - larger size
+                    MAX_SIZE = (500, 500)  # Increased size
+                    img.thumbnail(MAX_SIZE, Image.LANCZOS)
+                    
+                    # Save thumbnail
+                    img.save(thumb_path, optimize=True, quality=70)  # Higher quality
+                    
+                    # Store row data for writing to Excel and CSV
+                    valid_rows_data.append((row, thumb_path))
+                    
+                except Exception as e:
+                    if status_callback:
+                        status_callback(f"Errore con immagine {image_path}: {str(e)}")
+                    missing_images.append(f"{image_path} (errore: {str(e)})")
+            else:
+                missing_images.append(image_path)
+        
+        # Write valid rows to Excel with exactly the specified columns
+        for i, (row, thumb_path) in enumerate(valid_rows_data):
+            excel_row = i + 1  # +1 for header
+            
+            # Write only the required columns in the specified order
+            for j, orig_col in enumerate(REQUIRED_COLUMNS):
+                mapped_col = column_mapping[orig_col]
+                worksheet.write(excel_row, j+1, row[mapped_col])
+            
+            # Insert larger thumbnail
+            worksheet.insert_image(excel_row, 0, thumb_path, {'x_scale': 0.5, 'y_scale': 0.5})
+        
+        # Close Excel workbook
+        workbook.close()
+        
+        # Create DataFrame with only valid rows and only required columns
+        valid_df = pd.DataFrame([row for row, _ in valid_rows_data], columns=df.columns)
+        # Reorder columns for CSV
+        valid_df = valid_df[[column_mapping[col] for col in REQUIRED_COLUMNS]]
+        
+        # Export CSV
+        valid_df.to_csv(csv_output_path, index=False)
+        
+        # Return results
+        return True, {
+            "excel_success": True,
+            "crops_success": False,  # Not implemented yet
+            "csv_success": True,
+            "processed_rows": len(valid_rows_data),
+            "missing_images": len(missing_images),
+            "total_rows": total_rows,
+            "excel_path": excel_output_path,
+            "csv_path": csv_output_path,
+            "crops_dir": crops_dir
+        }
+        
+    except Exception as e:
+        if status_callback:
+            status_callback(f"Errore durante l'elaborazione: {str(e)}")
+        return False, {"error": str(e)}

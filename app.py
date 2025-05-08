@@ -133,7 +133,7 @@ class FolderDropArea(DropArea):
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Genera Excel Anteprime")
+        self.generate_button = QPushButton("Genera Output")
         self.setGeometry(100, 100, 650, 580)
         
         # Set app icon
@@ -245,7 +245,7 @@ class MainWindow(QMainWindow):
         self.generate_button = QPushButton("Genera Excel Anteprime")
         self.generate_button.setStyleSheet(GENERATE_BUTTON)
         self.generate_button.setCursor(Qt.PointingHandCursor)
-        self.generate_button.clicked.connect(self.generate_excel)
+        self.generate_button.clicked.connect(self.generate_outputs)
         main_layout.addWidget(self.generate_button)
         
         # Add status text area for missing images
@@ -302,12 +302,6 @@ class MainWindow(QMainWindow):
         path = QFileDialog.getExistingDirectory(self, "Seleziona Cartella di Output")
         if path:
             self.output_path.setText(path)
-    
-
-    def update_progress(self, value: int, maximum: int) -> None:
-        """Update the progress bar with current progress."""
-        self.progress_bar.setMaximum(maximum)
-        self.progress_bar.setValue(value)
 
     def update_status_text(self, message: str) -> None:
         """Update the status text area with a message."""
@@ -360,7 +354,8 @@ class MainWindow(QMainWindow):
         self.csv_status.setText("CSV: ⌛")
         self.csv_status.setStyleSheet(STATUS_INDICATOR_WAITING)
 
-    def generate_excel(self) -> None:
+    def generate_outputs(self) -> None:
+        """Generate all output files."""
         # Reset UI components first
         self.reset_processing_ui()
 
@@ -371,45 +366,49 @@ class MainWindow(QMainWindow):
         
         # Validate all inputs are provided
         if not excel_path:
-            self.status_text.setText("Errore: File Excel non fornito. Trascina un file Excel nell'area apposita.")
+            self.status_text.setText("Errore: File Excel non fornito.")
             self.status_text.setStyleSheet(STATUS_TEXT_ERROR)
             return
             
         if not images_folder:
-            self.status_text.setText("Errore: Cartella immagini non fornita. Trascina una cartella nell'area apposita.")
+            self.status_text.setText("Errore: Cartella immagini non fornita.")
             self.status_text.setStyleSheet(STATUS_TEXT_ERROR)
             return
             
         if not output_path:
-            self.status_text.setText("Errore: Percorso di output non specificato. Seleziona una cartella di destinazione.")
+            self.status_text.setText("Errore: Percorso di output non specificato.")
             self.status_text.setStyleSheet(STATUS_TEXT_ERROR)
             return
         
-        # If we get here, all inputs are provided
-        self.status_text.setText(f"Elaborazione in corso...\nFile Excel: {os.path.basename(excel_path)}\nCartella immagini: {os.path.basename(images_folder)}\nOutput: {os.path.basename(output_path)}")
-        self.status_text.setStyleSheet(STATUS_TEXT)  # Reset to normal style
+        # Define simple callbacks
+        def update_progress(current, total):
+            self.progress_bar.setMaximum(total)
+            self.progress_bar.setValue(current)
+            QApplication.processEvents()
         
-        print(f"Generazione Excel con:")
-        print(f"File Excel: {excel_path}")
-        print(f"Cartella immagini: {images_folder}")
-        print(f"Percorso output: {output_path}")
+        def update_status(message):
+            self.status_text.setText(message)
+            QApplication.processEvents()
         
-        # Simulate processing - this would be replaced with actual functionality
-        # Simulate checking for missing images
-        import random
-        missing_images = random.sample([f"image_{i}.jpg" for i in range(1, 50)], 5)
-        self.update_missing_images(missing_images, 120)
+        # Process files
+        success, results = process_files(excel_path, images_folder, output_path, 
+                                    update_progress, update_status)
         
-        # Simulate progress updates
-        for i in range(101):
-            self.update_progress(i, 100)
-            QApplication.processEvents()  # Allow UI to update
-            time.sleep(0.02)  # Simulate processing time
-        
-        # Simulate output statuses
-        self.update_output_status("excel", True)
-        self.update_output_status("crops", True)
-        self.update_output_status("csv", False)  # Example of a failed output
+        # Update UI based on results
+        if success:
+            # Update status indicators
+            self.update_output_status("excel", results.get("excel_success", False))
+            self.update_output_status("crops", results.get("crops_success", False))
+            self.update_output_status("csv", results.get("csv_success", False))
+            
+            # Update status text
+            self.status_text.setText(f"Elaborazione completata!\n"
+                                    f"Righe processate: {results.get('processed_rows', 0)}\n"
+                                    f"Immagini mancanti: {results.get('missing_images', 0)}")
+        else:
+            # Show error
+            self.status_text.setText(f"Errore: {results.get('error', 'Errore sconosciuto')}")
+            self.status_text.setStyleSheet(STATUS_TEXT_ERROR)
         
 if __name__ == "__main__":
     app = QApplication(sys.argv)
