@@ -1,5 +1,6 @@
-from typing import Tuple, Dict, Any, List, Set
+from typing import Tuple, Dict, Any, List
 import os, os.path, re
+import numpy as np
 import pandas as pd
 import xlsxwriter
 from PIL import Image
@@ -364,8 +365,6 @@ def generate_csv_output(df, output_path, column_mapping):
         Dictionary with processing information
     """
     try:
-        import os
-        import pandas as pd
         
         # Define the CSV columns in the exact order required
         CSV_COLUMNS = [
@@ -398,34 +397,45 @@ def generate_csv_output(df, output_path, column_mapping):
         
         # Create a new DataFrame with the CSV columns
         csv_df = pd.DataFrame(columns=CSV_COLUMNS)
+        total_rows = len(df)
+        chunk_size = 60
+        chunk_number = (total_rows + chunk_size - 1) // chunk_size  # Ceiling division
+        csv_paths =[]
+
+        split_df = np.array_split(df, chunk_number)
         
-        # For each row in the valid data, map to the CSV format
-        for i, row in df.iterrows():
-            csv_row = {}
-            
-            # For each CSV column, get the corresponding Excel column and value
-            for csv_col in CSV_COLUMNS:
-                excel_col = CSV_TO_EXCEL_MAPPING.get(csv_col)
-                if excel_col:
-                    # Get the actual column name from the mapping (handles case/spelling variations)
-                    actual_col = column_mapping.get(excel_col)
-                    if actual_col in row:
-                        csv_row[csv_col] = row[actual_col]
+        for j, chunk_df in enumerate(split_df):
+            # For each row in the valid data, map to the CSV format
+            for i, row in chunk_df.iterrows():
+                csv_row = {}
+                
+                # For each CSV column, get the corresponding Excel column and value
+                for csv_col in CSV_COLUMNS:
+                    excel_col = CSV_TO_EXCEL_MAPPING.get(csv_col)
+                    if excel_col:
+                        # Get the actual column name from the mapping (handles case/spelling variations)
+                        actual_col = column_mapping.get(excel_col)
+                        if actual_col in row:
+                            csv_row[csv_col] = row[actual_col]
+                        else:
+                            csv_row[csv_col] = ""  # Handle missing columns
                     else:
-                        csv_row[csv_col] = ""  # Handle missing columns
-                else:
-                    csv_row[csv_col] = ""  # Handle unmapped columns
+                        csv_row[csv_col] = ""  # Handle unmapped columns
+                
+                # Add the row to the CSV DataFrame
+                csv_df = pd.concat([csv_df, pd.DataFrame([csv_row])], ignore_index=True)
             
-            # Add the row to the CSV DataFrame
-            csv_df = pd.concat([csv_df, pd.DataFrame([csv_row])], ignore_index=True)
+            # Create CSV file path
+            csv_fiemane = f"import_campioni_{j+1}di{chunk_number}.csv"
+            csv_path = os.path.join(output_path, csv_fiemane)
+            csv_paths.append(csv_path)
+            
+            # Export DataFrame to CSV
+            print("csv df chunk", csv_df.head())
+            csv_df.to_csv(csv_path, index=False)
+            csv_df = pd.DataFrame(columns=CSV_COLUMNS)
         
-        # Create CSV file path
-        csv_path = os.path.join(output_path, "import_campioni.csv")
-        
-        # Export DataFrame to CSV
-        csv_df.to_csv(csv_path, index=False)
-        
-        return {"success": True, "csv_path": csv_path, "rows": len(csv_df)}
+        return {"success": True, "csv_path": csv_paths, "rows": len(csv_df)}
         
     except Exception as e:
         import traceback

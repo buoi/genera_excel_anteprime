@@ -140,10 +140,7 @@ class MainWindow(QMainWindow):
         app_icon = QIcon("logo.png")
         self.setWindowIcon(app_icon)
         
-        # Set window background color
-        palette = self.palette()
-        palette.setColor(QPalette.Window, QColor("#FFFFFF"))
-        self.setPalette(palette)
+
         
         # Create central widget
         central_widget = QWidget()
@@ -413,6 +410,25 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon("logo.png"))  # Set the app icon for taskbar/dock
+    # Force light mode colors regardless of system theme
+    app.setStyle("Fusion")  # Use Fusion style for consistent appearance
+    # Set window background color
+
+    # Create a light mode palette
+    light_palette = QPalette()
+    light_palette.setColor(QPalette.Window, QColor(255, 255, 255))
+    light_palette.setColor(QPalette.WindowText, QColor(0, 0, 0))
+    light_palette.setColor(QPalette.Base, QColor(255, 255, 255))
+    light_palette.setColor(QPalette.AlternateBase, QColor(245, 245, 245))
+    light_palette.setColor(QPalette.Text, QColor(0, 0, 0))
+    light_palette.setColor(QPalette.Button, QColor(240, 240, 240))
+    light_palette.setColor(QPalette.ButtonText, QColor(0, 0, 0))
+    light_palette.setColor(QPalette.Link, QColor(0, 0, 255))
+    light_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+    light_palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+
+    # Apply the palette to the application
+    app.setPalette(light_palette)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
