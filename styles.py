@@ -72,10 +72,17 @@ DESCRIPTION_TEXT = """
     text-align: center;
 """
 
-BULLET_POINT = """
-    color: #666677;
+FORMATTED_INFO = """
+    color: #444455;
     font-size: 14px;
-    text-align: center;
+    margin-bottom: 5px;
+"""
+
+SUPPORT_INFO = """
+    color: #888899;
+    font-size: 12px;
+    font-style: italic;
+    margin-bottom: 10px;
 """
 
 FOOTER_TEXT = """
@@ -91,3 +98,66 @@ INFO_TEXT = """
     margin-bottom: 15px;
 """
 
+# Status text area
+STATUS_TEXT = """
+    background-color: #FFFFFF;
+    border: 1px solid #B8C4FF;
+    border-radius: 4px;
+    padding: 5px;
+    font-size: 12px;
+    color: #444455;
+"""
+
+STATUS_TEXT_ERROR = """
+    background-color: #FFF0F0;
+    border: 1px solid #FFCCCC;
+    border-radius: 4px;
+    padding: 5px;
+    font-size: 12px;
+    color: #CC0000;
+"""
+
+# Progress bar
+PROGRESS_BAR = """
+    QProgressBar {
+        border: 1px solid #B8C4FF;
+        border-radius: 4px;
+        text-align: center;
+        padding: 2px;
+        background-color: #FFFFFF;
+    }
+    
+    QProgressBar::chunk {
+        background-color: #B8C4FF;
+        width: 10px;
+        margin: 0px;
+    }
+"""
+
+# Status indicators
+STATUS_INDICATOR_WAITING = """
+    background-color: #F0F0F0;
+    color: #888888;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+"""
+
+STATUS_INDICATOR_SUCCESS = """
+    background-color: #E0FFE0;
+    color: #006600;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+"""
+
+STATUS_INDICATOR_ERROR = """
+    background-color: #FFE0E0;
+    color: #660000;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+"""

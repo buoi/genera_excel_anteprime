@@ -2,3 +2,4 @@
 __pycache__
 logo.png
 .vscode
+.DS_store
