@@ -351,10 +351,87 @@ def generate_crop_images(df, foto_column, images_folder, output_path,
     # This will be filled in later
     pass
 
-def generate_csv_output(df, output_path):
-    """Generate CSV file for website import."""
-    # This will be filled in later
-    pass
+def generate_csv_output(df, output_path, column_mapping):
+    """
+    Generate CSV file for website import with specific column order and names.
+    
+    Args:
+        df: DataFrame with valid rows (already cleaned and filtered)
+        output_path: Path to save the CSV file
+        column_mapping: Mapping from original column names to their actual names in the dataframe
+        
+    Returns:
+        Dictionary with processing information
+    """
+    try:
+        import os
+        import pandas as pd
+        
+        # Define the CSV columns in the exact order required
+        CSV_COLUMNS = [
+            "tax:casse", "tax:categorie", "cf:foto", "cf:foto_dettaglio", "tax:composizioni",
+            "cf:codice", "cf:fornitore", "cf:art_fornitore", "cf:unita_di_misura", "cf:altezza",
+            "cf:peso", "tax:armature", "tax:lavorazioni", "tax:descrizioni", "tax:motivi",
+            "tax:sostenibili", "cf:certificazione"
+        ]
+        
+        # Mapping from CSV columns to Excel columns
+        CSV_TO_EXCEL_MAPPING = {
+            "tax:casse": "POSIZIONE",
+            "tax:categorie": "CATEGORIA",
+            "cf:foto": "FOTO",
+            "cf:foto_dettaglio": "FOTO DETTAGLIO",
+            "tax:composizioni": "COMPOSIZIONE",
+            "cf:codice": "CODICE TAILOR",
+            "cf:fornitore": "FORNITORE",
+            "cf:art_fornitore": "ART. FORNITORE",
+            "cf:unita_di_misura": "UNITA' DI MISURA",
+            "cf:altezza": "ALTEZZA",
+            "cf:peso": "PESO",
+            "tax:armature": "ARMATURA",
+            "tax:lavorazioni": "LAVORAZIONE",
+            "tax:descrizioni": "DESCRIZIONE",
+            "tax:motivi": "MOTIVO",
+            "tax:sostenibili": "SOSTENIBILITA'",
+            "cf:certificazione": "CERTIFICAZIONE"
+        }
+        
+        # Create a new DataFrame with the CSV columns
+        csv_df = pd.DataFrame(columns=CSV_COLUMNS)
+        
+        # For each row in the valid data, map to the CSV format
+        for i, row in df.iterrows():
+            csv_row = {}
+            
+            # For each CSV column, get the corresponding Excel column and value
+            for csv_col in CSV_COLUMNS:
+                excel_col = CSV_TO_EXCEL_MAPPING.get(csv_col)
+                if excel_col:
+                    # Get the actual column name from the mapping (handles case/spelling variations)
+                    actual_col = column_mapping.get(excel_col)
+                    if actual_col in row:
+                        csv_row[csv_col] = row[actual_col]
+                    else:
+                        csv_row[csv_col] = ""  # Handle missing columns
+                else:
+                    csv_row[csv_col] = ""  # Handle unmapped columns
+            
+            # Add the row to the CSV DataFrame
+            csv_df = pd.concat([csv_df, pd.DataFrame([csv_row])], ignore_index=True)
+        
+        # Create CSV file path
+        csv_path = os.path.join(output_path, "import_campioni.csv")
+        
+        # Export DataFrame to CSV
+        csv_df.to_csv(csv_path, index=False)
+        
+        return {"success": True, "csv_path": csv_path, "rows": len(csv_df)}
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Error generating CSV: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 def process_files(excel_path: str, images_folder: str, output_path: str, 
                   progress_callback=None, status_callback=None):
@@ -392,7 +469,7 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
         os.makedirs(crops_dir, exist_ok=True)
         
         # Create a temporary directory for thumbnails
-        thumbs_dir = os.path.join(output_path, "thumbnails")
+        thumbs_dir = os.path.join(output_path, ".thumbnails")
         os.makedirs(thumbs_dir, exist_ok=True)
         
         # Create Excel workbook
@@ -484,11 +561,12 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
         
         # Create DataFrame with only valid rows and only required columns
         valid_df = pd.DataFrame([row for row, _ in valid_rows_data], columns=df.columns)
-        # Reorder columns for CSV
-        valid_df = valid_df[[column_mapping[col] for col in REQUIRED_COLUMNS]]
         
-        # Export CSV
-        valid_df.to_csv(csv_output_path, index=False)
+        # Generate CSV file
+        if status_callback:
+            status_callback("Genero il file CSV...")
+            
+        csv_result = generate_csv_output(valid_df, output_path, column_mapping)
         
         # Return results
         return True, {
