@@ -540,8 +540,9 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
                     crop_path = os.path.join(crops_dir, crop_filename)
                     _ = crop_image(img, crop_path)
                     
-                    # Create a copy of the row to modify the FOTO DETTAGLIO field
-                    modified_row = row.copy()
+                    # Create a normalized copy of the row
+                    modified_row = normalize_row(row, column_mapping)
+                    
                     # Update the FOTO DETTAGLIO field with the crop filename
                     foto_dettaglio_col = column_mapping["FOTO DETTAGLIO"]
                     modified_row[foto_dettaglio_col] = crop_filename
@@ -672,3 +673,44 @@ def crop_image(img, output_path, max_size=(1000, 1000), quality=80):
     except Exception as e:
         print(f"Error cropping image: {str(e)}")
         return False
+
+def normalize_row(row, column_mapping):
+    """
+    Normalize row data before writing to output files.
+    
+    Args:
+        row: DataFrame row to normalize
+        column_mapping: Mapping from canonical column names to actual column names
+        
+    Returns:
+        Normalized copy of row
+    """
+    # Create a copy to avoid modifying the original
+    normalized_row = row.copy()
+    
+    # Handle altezza and peso (extract and keep the smallest number)
+    for field in ["ALTEZZA", "PESO"]:
+        if field in column_mapping:
+            col = column_mapping[field]
+            if col in row and row[col] is not None and not pd.isna(row[col]):
+                # Get the value as string
+                value = str(row[col])
+                
+                # Try to extract all numbers from the string
+                import re
+                numbers = re.findall(r'\d+(?:\.\d+)?', value)
+                
+                # If numbers found, convert to float and keep the smallest
+                if numbers:
+                    try:
+                        float_numbers = [float(num) for num in numbers]
+                        smallest = min(float_numbers)
+                        # Set the normalized value
+                        normalized_row[col] = smallest
+                    except ValueError:
+                        # If conversion fails, keep original
+                        pass
+    
+    # Add more normalization rules as needed
+    
+    return normalized_row
