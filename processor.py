@@ -536,12 +536,18 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
                     
                     # 2. Generate crop for website
                     base_name = os.path.splitext(os.path.basename(image_path))[0]
-                    crop_filename = f"{base_name}_crop.jpg"
+                    crop_filename = f"{base_name}_dettaglio.jpg"
                     crop_path = os.path.join(crops_dir, crop_filename)
                     _ = crop_image(img, crop_path)
                     
-                    # Store row data for Excel and CSV
-                    valid_rows_data.append((row, thumb_path))
+                    # Create a copy of the row to modify the FOTO DETTAGLIO field
+                    modified_row = row.copy()
+                    # Update the FOTO DETTAGLIO field with the crop filename
+                    foto_dettaglio_col = column_mapping["FOTO DETTAGLIO"]
+                    modified_row[foto_dettaglio_col] = crop_filename
+                    
+                    # Store modified row data for Excel and CSV
+                    valid_rows_data.append((modified_row, thumb_path))
                     
                 except Exception as e:
                     if status_callback:
