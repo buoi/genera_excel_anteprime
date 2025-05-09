@@ -520,31 +520,27 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
             if not image_path:
                 missing_images.append("(Vuoto)")
                 continue
-                
+                    
             full_image_path = os.path.join(images_folder, image_path)
             
             # Check if image exists
             if os.path.isfile(full_image_path):
                 try:
-                    # Process the image
-                    # Create thumbnail for Excel
-                    thumb_filename = f"thumb_{i}_{os.path.basename(image_path)}"
-                    thumb_path = os.path.join(thumbs_dir, thumb_filename)
-                    
                     # Open and process image
                     img = Image.open(full_image_path)
                     
-                    # Rotate image if needed (based on your mockup)
-                    img = img.rotate(90, expand=True)
+                    # 1. Generate thumbnail for Excel
+                    thumb_filename = f"thumb_{i}_{os.path.basename(image_path)}"
+                    thumb_path = os.path.join(thumbs_dir, thumb_filename)
+                    _ = create_thumbnail(img, thumb_path)
                     
-                    # Resize for thumbnail - larger size
-                    MAX_SIZE = (500, 500)  # Increased size
-                    img.thumbnail(MAX_SIZE, Image.LANCZOS)
+                    # 2. Generate crop for website
+                    base_name = os.path.splitext(os.path.basename(image_path))[0]
+                    crop_filename = f"{base_name}_crop.jpg"
+                    crop_path = os.path.join(crops_dir, crop_filename)
+                    _ = crop_image(img, crop_path)
                     
-                    # Save thumbnail
-                    img.save(thumb_path, optimize=True, quality=70)  # Higher quality
-                    
-                    # Store row data for writing to Excel and CSV
+                    # Store row data for Excel and CSV
                     valid_rows_data.append((row, thumb_path))
                     
                 except Exception as e:
@@ -581,7 +577,7 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
         # Return results
         return True, {
             "excel_success": True,
-            "crops_success": False,  # Not implemented yet
+            "crops_success": True,
             "csv_success": True,
             "processed_rows": len(valid_rows_data),
             "missing_images": len(missing_images),
@@ -595,3 +591,78 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
         if status_callback:
             status_callback(f"Errore durante l'elaborazione: {str(e)}")
         return False, {"error": str(e)}
+    
+def create_thumbnail(img, output_path, max_size=(500, 500), quality=70):
+    """
+    Create a thumbnail from an image and save it.
+    
+    Args:
+        img: PIL Image object to thumbnail
+        output_path: Path to save the thumbnail
+        max_size: Maximum dimensions (width, height)
+        quality: JPEG quality (0-100)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Make sure the output directory exists
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Create a copy to avoid modifying the original
+        thumb_img = img.copy()
+        # Rotate image if needed
+        thumb_img = thumb_img.rotate(90, expand=True)
+        # Resize to fit within max_size while preserving aspect ratio
+        thumb_img.thumbnail(max_size, Image.LANCZOS)
+        
+        # Save the thumbnail
+        thumb_img.save(output_path, optimize=True, quality=quality)
+        
+        return True
+    except Exception as e:
+        print(f"Error creating thumbnail: {str(e)}")
+        return False
+
+def crop_image(img, output_path, max_size=(1000, 1000), quality=80):
+    """
+    Crop an image according to specific parameters and save it.
+    
+    Args:
+        img: PIL Image object to crop
+        output_path: Path to save the cropped image
+        max_size: Maximum dimensions after cropping
+        quality: JPEG quality (0-100)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Make sure the output directory exists
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Apply crop
+        
+        crop_width = 3648/2-300
+        crop_height = 4864/2-300
+        downshift = -200
+        img = img.rotate(90, expand=True)
+        
+        # Calculate crop coordinates
+        x = (img.width - crop_width)//2
+        y = (img.height - crop_height)//2
+        crop_box = (x, y+downshift, x+crop_width, y+crop_height+downshift)
+        
+        # Apply the crop
+        cropped_img = img.crop(crop_box)
+        
+        # Resize if needed
+        cropped_img.thumbnail(max_size, Image.LANCZOS)
+        
+        # Save the cropped image
+        cropped_img.save(output_path, format="JPEG", quality=quality)
+        
+        return True
+    except Exception as e:
+        print(f"Error cropping image: {str(e)}")
+        return False
