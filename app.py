@@ -1,4 +1,4 @@
-import sys, time
+import sys
 from typing import Optional
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QScrollArea,
@@ -267,17 +267,17 @@ class MainWindow(QMainWindow):
         status_layout.setSpacing(10)
 
         # Excel indicator
-        self.excel_status = QLabel("Excel: ⌛")
+        self.excel_status = QLabel("Excel Anteprime")
         self.excel_status.setStyleSheet(STATUS_INDICATOR_WAITING)
         status_layout.addWidget(self.excel_status)
 
         # Crops indicator
-        self.crops_status = QLabel("Crops: ⌛")
+        self.crops_status = QLabel("Dettagli")
         self.crops_status.setStyleSheet(STATUS_INDICATOR_WAITING)
         status_layout.addWidget(self.crops_status)
 
         # CSV indicator
-        self.csv_status = QLabel("CSV: ⌛")
+        self.csv_status = QLabel("CSV sito")
         self.csv_status.setStyleSheet(STATUS_INDICATOR_WAITING)
         status_layout.addWidget(self.csv_status)
 

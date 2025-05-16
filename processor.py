@@ -5,13 +5,7 @@ import pandas as pd
 import xlsxwriter
 from PIL import Image
 
-
-# Add import for numbers-parser
-try:
-    from numbers_parser import Document as NumbersDocument
-except ImportError:
-    # If the library is not installed, we'll handle it gracefully
-    NumbersDocument = None
+from numbers_parser import Document as NumbersDocument
 
 # List of required columns for our specific Excel format
 REQUIRED_COLUMNS = [
@@ -20,6 +14,70 @@ REQUIRED_COLUMNS = [
     "ALTEZZA", "PESO", "ARMATURA", "LAVORAZIONE", "DESCRIZIONE", 
     "MOTIVO", "SOSTENIBILITA'", "CERTIFICAZIONE"
 ]
+
+def normalize_image_filename(filename: str) -> str:
+    """
+    Verifica e normalizza il nome di un file immagine, correggendo piccoli errori.
+    
+    Args:
+        filename: Il nome del file da normalizzare
+        
+    Returns:
+        Nome del file normalizzato
+    
+    Esempi:
+        >>> normalize_image_filename("L1170719.JPG")
+        'L1170719.JPG'
+        >>> normalize_image_filename("L1170719JPG")
+        'L1170719.JPG'
+        >>> normalize_image_filename("L1170719jpg")
+        'L1170719.jpg'
+        >>> normalize_image_filename("L1170719")
+        'L1170719.JPG'
+    """
+    import re
+    import os.path
+    
+    # Lista delle estensioni immagine supportate
+    supported_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff']
+    
+    # Se il filename è vuoto o None, restituisci stringa vuota
+    if not filename:
+        return ""
+    
+    # Normalizza al minuscolo per semplificare l'analisi
+    filename = filename.strip()
+    
+    # Controllo se ha già un'estensione corretta
+    base, ext = os.path.splitext(filename)
+    
+    # Se l'estensione esiste e inizia con un punto, verifichiamo se è supportata
+    if ext and ext.startswith('.'):
+        # Rimuovi il punto e normalizza
+        ext_clean = ext[1:].lower()
+        if ext_clean in supported_extensions:
+            # L'estensione è già corretta, la normalizziamo
+            return f"{base}.{ext_clean.upper()}"
+    
+    # Se siamo qui, l'estensione è mancante o non ha il punto
+    
+    # Pattern per trovare estensioni incorporate nel nome senza punto
+    pattern = r'(.+?)(jpe?g|png|gif|bmp|tiff)$'
+    match = re.match(pattern, filename.lower())
+    
+    if match:
+        # Abbiamo trovato un'estensione incorporata, estraiamola
+        base = match.group(1)
+        ext = match.group(2)
+        
+        # Normalizza jpg/jpeg
+        if ext == 'jpeg':
+            ext = 'jpg'
+            
+        return f"{base}.{ext.upper()}"
+    
+    # Se non troviamo un'estensione, assumiamo JPG come default
+    return f"{filename}.JPG"
 
 def normalize_column_name(column: str) -> str:
     """
@@ -510,6 +568,7 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
         if status_callback:
             status_callback("Elaborazione in corso...")
         
+        df = df.fillna('')
         # Main processing loop
         for i, (_, row) in enumerate(df.iterrows()):
             if progress_callback:
@@ -517,6 +576,7 @@ def process_files(excel_path: str, images_folder: str, output_path: str,
             
             # Get image path
             image_path = str(row[foto_column]) if not pd.isna(row[foto_column]) else ""
+            image_path = normalize_image_filename(image_path)
             if not image_path:
                 missing_images.append("(Vuoto)")
                 continue
